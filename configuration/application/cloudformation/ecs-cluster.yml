@@ -1,0 +1,158 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Course project ECS cluster
+
+Parameters:
+  VpcId:
+    Type: String
+    Description: Id of VPC stack to build off of
+  VpcPublicSubnetAId:
+    Type: String
+    Description: Public subnet A id of VPC stack to build off of
+  VpcPublicSubnetBId:
+    Type: String
+    Description: Public subnet B id of VPC stack to build off of
+
+Resources:
+  EcsCluster:
+    Type: AWS::ECS::Cluster
+
+  DefaultSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow http to client host
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: 0.0.0.0/0
+
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      IpAddressType: ipv4
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref DefaultSecurityGroup
+      Subnets:
+        - !Ref VpcPublicSubnetAId
+        - !Ref VpcPublicSubnetBId
+      Type: application
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VpcId
+      CidrBlock: 172.31.50.0/24
+      MapPublicIpOnLaunch: false
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs
+          Ref: 'AWS::Region'
+      Tags:
+        - Key: Name
+          Value: !Sub 'Private Subnet 1 - ${AWS::StackName}'
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VpcId
+      CidrBlock: 172.31.51.0/24
+      MapPublicIpOnLaunch: false
+      AvailabilityZone: !Select
+        - 1
+        - !GetAZs
+          Ref: 'AWS::Region'
+      Tags:
+        - Key: Name
+          Value: !Sub 'Private Subnet 2 - ${AWS::StackName}'
+
+  NatGateway1EIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway1EIP.AllocationId
+      SubnetId: !Ref VpcPublicSubnetAId
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VpcId
+      Tags:
+        - Key: Name
+          Value: !Sub 'Private Route Table 1 - ${AWS::StackName}'
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VpcId
+      Tags:
+        - Key: Name
+          Value: !Sub 'Private Route Table 2 - ${AWS::StackName}'
+
+  DefaultPrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+
+  DefaultPrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateSubnet1
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      SubnetId: !Ref PrivateSubnet2
+
+Outputs:
+  EcsClusterVPCId:
+    Description: A reference to the created ECS Cluster vpc id
+    Value: !Ref VpcId
+    Export:
+      Name: !Sub ${AWS::StackName}-ecs-cluster-vpc-id
+
+  EcsClusterExport:
+    Description: A reference to the created ECS Cluster
+    Value: !Ref EcsCluster
+    Export:
+      Name: !Sub ${AWS::StackName}-ecs-cluster
+
+  DefaultSecurityGroupExport:
+    Description: A reference to the created SG
+    Value: !Ref DefaultSecurityGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-default-security-group
+
+  ApplicationLoadBalancerArnExport:
+    Description: A reference to the created ALB
+    Value: !Ref ApplicationLoadBalancer
+    Export:
+      Name: !Sub ${AWS::StackName}-alb-arn
+
+  PrivateSubnet1:
+    Description: A reference to the Private Subnet 1
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub ${AWS::StackName}-private-subnet-1
+
+  PrivateSubnet2:
+    Description: A reference to the Private Subnet 2
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub ${AWS::StackName}-private-subnet-2
