@@ -14,12 +14,12 @@
 
 - Service discovery
 
-## How to build:
+### How to build:
 
 **Regular build:**
 
 - `./gradlew clean build`
-- `docker build --network=course_local -t discovery .`
+- `docker build -t discovery .`
 - `docker run -d -p 8761:8761 --network=course_local -h discovery --name discovery discovery`
 
 **Without tests build:** `./gradlew clean build -x test`
